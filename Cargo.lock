@@ -790,6 +790,7 @@ dependencies = [
 name = "esp-jokes-rs"
 version = "0.1.0"
 dependencies = [
+ "display-interface",
  "embassy-executor",
  "embassy-net",
  "embassy-net-driver",

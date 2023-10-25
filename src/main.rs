@@ -15,17 +15,14 @@ use embedded_graphics::mono_font::ascii::FONT_6X10;
 use embedded_graphics::mono_font::MonoTextStyle;
 use embedded_graphics::prelude::*;
 use embedded_graphics::text::Text;
-use embedded_graphics::{pixelcolor::Rgb565, prelude::RgbColor};
 use embedded_svc::wifi::{ClientConfiguration, Configuration, Wifi};
 use esp_backtrace as _;
 use esp_println::println;
 use esp_wifi::wifi::{WifiController, WifiDevice, WifiEvent, WifiMode, WifiState};
 use esp_wifi::{initialize, EspWifiInitFor};
-use hal::peripherals::SPI2;
-use hal::spi::FullDuplexMode;
 use hal::{
     clock::ClockControl, embassy, gpio::*, peripherals::Peripherals, prelude::*, timer::TimerGroup,
-    Delay, Rtc, Spi, IO,
+    Rtc, IO,
 };
 use hal::{systimer::SystemTimer, Rng};
 
@@ -54,6 +51,10 @@ fn init_heap() {
 #[cfg(feature = "display-st7735")]
 mod display {
     use super::*;
+    use embedded_graphics::pixelcolor::Rgb565;
+    use hal::peripherals::SPI2;
+    use hal::spi::FullDuplexMode;
+    use hal::Spi;
     use st7735_lcd::{self, ST7735};
 
     pub type SPI = Spi<'static, SPI2, FullDuplexMode>;
@@ -62,6 +63,11 @@ mod display {
     pub type Color = Rgb565;
     pub const BACKGROUND: Color = Rgb565::BLACK;
     pub const TEXT: Color = Rgb565::RED;
+
+    pub fn flush(_display: &mut DISPLAY) -> Result<(), ()> {
+        // no-op
+        Ok(())
+    }
 }
 
 #[cfg(feature = "display-ssd1306")]
@@ -79,6 +85,10 @@ mod display {
     pub type Color = BinaryColor;
     pub const BACKGROUND: Color = BinaryColor::Off;
     pub const TEXT: Color = BinaryColor::On;
+
+    pub fn flush(display: &mut DISPLAY) -> Result<(), display_interface::DisplayError> {
+        display.flush()
+    }
 }
 
 use display::DISPLAY;
@@ -152,6 +162,8 @@ async fn main(spawner: embassy_executor::Spawner) {
 
     #[cfg(feature = "display-st7735")]
     let mut display: DISPLAY = {
+        use hal::{Delay, Spi};
+
         let miso = io.pins.gpio6.into_push_pull_output(); // A0
         let rst = io.pins.gpio7.into_push_pull_output();
 
@@ -206,6 +218,7 @@ async fn main(spawner: embassy_executor::Spawner) {
     };
 
     display.clear(display::BACKGROUND).unwrap();
+    display::flush(&mut display).unwrap();
 
     spawner.spawn(connection_wifi(controller)).ok();
     spawner.spawn(net_task(&stack)).ok();
@@ -251,6 +264,7 @@ async fn task(
                 Timer::after(Duration::from_millis(500)).await;
             }
             display.clear(display::TEXT).unwrap();
+            display::flush(&mut display).unwrap();
             println!("clicked");
 
             let tls_config = TlsConfig::new(
@@ -277,6 +291,8 @@ async fn task(
             Text::new(body, Point::new(10, 10), style)
                 .draw(&mut display)
                 .unwrap();
+            display::flush(&mut display).unwrap();
+
             println!("Http body: {}", body);
             Timer::after(Duration::from_millis(3000)).await;
         }

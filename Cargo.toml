@@ -30,9 +30,10 @@ static_cell = { version = "1.2.0", features = ["nightly"] }
 # display drivers
 st7735-lcd = {version = "0.9.0", optional = true }
 ssd1306 = { version = "0.8.3", optional = true }
+display-interface = { version = "0.4.1", optional = true }
 
 [features]
 #default = ["display-st7735"]
 default = ["display-ssd1306"]
 display-st7735 = ["st7735-lcd"]
-display-ssd1306 = ["ssd1306"]
+display-ssd1306 = ["ssd1306", "display-interface"]
