@@ -157,16 +157,16 @@ async fn main(spawner: embassy_executor::Spawner) {
 #[embassy_executor::task]
 async fn task(mut input: Gpio9<Input<PullUp>>, stack: &'static Stack<WifiDevice<'static>>, seed: u64, mut display: DISPLAY<'_>) {
 
-    let mut rx_buffer = [0; 4 * 1024];
-    let mut tls_read_buffer = [0; 4 * 1024];
-    let mut tls_write_buffer = [0; 4 * 1024];
-
+    let mut rx_buffer = [0; 8 * 1024];
+    let mut tls_read_buffer = [0; 8* 1024];
+    let mut tls_write_buffer = [0; 8 * 1024];
+    let client_state = TcpClientState::<4, 4096, 4096>::new();
+    let tcp_client = TcpClient::new(&stack, &client_state);
+    let dns = DnsSocket::new(&stack);
+    
     let style = MonoTextStyle::new(&FONT_6X10, Rgb565::WHITE);
     
-    // let client_state = TcpClientState::<1, 1096, 1096>::new();
-    // let tcp_client = TcpClient::new(&stack, &client_state);
-    // let dns = DnsSocket::new(&stack);
-
+    
     loop {
         let _ = input.wait_for_any_edge().await;
         if input.is_high().unwrap() {
@@ -188,34 +188,30 @@ async fn task(mut input: Gpio9<Input<PullUp>>, stack: &'static Stack<WifiDevice<
             }
             display.clear(Rgb565::RED).unwrap();
             println!("clicked");
-            loop {
-                let client_state = TcpClientState::<4, 4096, 4096>::new();
-                let tcp_client = TcpClient::new(&stack, &client_state);
-                let dns = DnsSocket::new(&stack);
+
             
-                let tls_config = TlsConfig::new(seed, &mut tls_read_buffer, &mut tls_write_buffer, TlsVerify::None);
-                let mut http_client = HttpClient::new_with_tls(&tcp_client, &dns, tls_config);
-                let mut request =
-                    http_client.request(Method::GET, "https://v2.jokeapi.dev/joke/Programming\\?format=text")
-                        .await
-                        .unwrap();
-            
-                let response = request
-                    .send(&mut rx_buffer)
+            let tls_config = TlsConfig::new(seed, &mut tls_read_buffer, &mut tls_write_buffer, TlsVerify::None);
+            let mut http_client = HttpClient::new_with_tls(&tcp_client, &dns, tls_config);
+            let mut request =
+                http_client.request(Method::GET, "https://v2.jokeapi.dev/joke/Programming?format=txt")
                     .await
                     .unwrap();
+            
+            let response = request
+                .send(&mut rx_buffer)
+                .await
+                .unwrap();
 
-                
 
-                let body = from_utf8(response.body().read_to_end().await.unwrap()).unwrap();
+            let body = from_utf8(response.body().read_to_end().await.unwrap()).unwrap();
 
-                display.clear(Rgb565::GREEN).unwrap();
+            display.clear(Rgb565::BLUE).unwrap();
 
-                Text::new(body, Point::new(1,1), style).draw(&mut display).unwrap();
-                println!("Http body: {}", body);
-                Timer::after(Duration::from_millis(3000)).await;
-
-            }
+            Text::new(body, Point::new(10,10), style).draw(&mut display).unwrap();
+            println!("Http body: {}", body);
+            Timer::after(Duration::from_millis(3000)).await;
+            break;
+            
         
         }
     }

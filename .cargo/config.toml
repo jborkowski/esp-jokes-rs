@@ -7,8 +7,9 @@ ESP_LOGLEVEL="INFO"
 [build]
 rustflags = [
   "-C", "link-arg=-Tlinkall.x",
-"-C", "link-arg=-Trom_functions.x",
-
+  "-C", "link-arg=-Trom_functions.x",
+ 
+  "-C", "opt-level=z",
   # Required to obtain backtraces (e.g. when using the "esp-backtrace" crate.)
   # NOTE: May negatively impact performance of produced code
   "-C", "force-frame-pointers",
