@@ -14,8 +14,12 @@ use embassy_time::{Duration, Timer};
 use embedded_graphics::mono_font::ascii::FONT_6X10;
 use embedded_graphics::mono_font::MonoTextStyle;
 use embedded_graphics::prelude::*;
-use embedded_graphics::text::Text;
+use embedded_graphics::primitives::Rectangle;
 use embedded_svc::wifi::{ClientConfiguration, Configuration, Wifi};
+use embedded_text::alignment::HorizontalAlignment;
+use embedded_text::style::HeightMode;
+use embedded_text::style::TextBoxStyleBuilder;
+use embedded_text::TextBox;
 use esp_backtrace as _;
 use esp_println::println;
 use esp_wifi::wifi::{WifiController, WifiDevice, WifiEvent, WifiMode, WifiState};
@@ -243,6 +247,16 @@ async fn task(
     let dns = DnsSocket::new(&stack);
 
     let style = MonoTextStyle::new(&FONT_6X10, display::TEXT);
+    let textbox_style = TextBoxStyleBuilder::new()
+        .height_mode(HeightMode::FitToText)
+        .alignment(HorizontalAlignment::Justified)
+        .paragraph_spacing(6)
+        .build();
+
+    let bounds = Rectangle::new(
+        Point::zero(),
+        Size::new(display.bounding_box().size.width, 0),
+    );
 
     loop {
         let _ = input.wait_for_any_edge().await;
@@ -265,7 +279,6 @@ async fn task(
             }
             display.clear(display::TEXT).unwrap();
             display::flush(&mut display).unwrap();
-            println!("clicked");
 
             let tls_config = TlsConfig::new(
                 seed,
@@ -287,14 +300,12 @@ async fn task(
             let body = from_utf8(response.body().read_to_end().await.unwrap()).unwrap();
 
             display.clear(display::BACKGROUND).unwrap();
-
-            Text::new(body, Point::new(10, 10), style)
+            TextBox::with_textbox_style(body, bounds, style, textbox_style)
                 .draw(&mut display)
                 .unwrap();
             display::flush(&mut display).unwrap();
 
             println!("Http body: {}", body);
-            Timer::after(Duration::from_millis(3000)).await;
         }
     }
 }
