@@ -204,7 +204,7 @@ async fn main(spawner: embassy_executor::Spawner) {
             peripherals.I2C0,
             sda,
             scl,
-            100u32.kHz(),
+            400u32.kHz(),
             &mut system.peripheral_clock_control,
             &clocks,
         );
