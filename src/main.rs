@@ -30,10 +30,8 @@ use hal::{
 use hal::{systimer::SystemTimer, Rng};
 
 use embedded_graphics::draw_target::DrawTarget;
-use heapless::Vec;
 use reqwless::client::{HttpClient, TlsConfig, TlsVerify};
-use reqwless::headers::ContentType;
-use reqwless::request::{Method, RequestBuilder};
+use reqwless::request::Method;
 use static_cell::make_static;
 
 const SSID: &str = env!("SSID");
@@ -60,6 +58,27 @@ mod display {
 
     pub type SPI = Spi<'static, SPI2, FullDuplexMode>;
     pub type DISPLAY<'a> = ST7735<SPI, GpioPin<Output<PushPull>, 6>, GpioPin<Output<PushPull>, 7>>;
+
+    pub type Color = Rgb565;
+    pub const BACKGROUND: Color = Rgb565::BLACK;
+    pub const TEXT: Color = Rgb565::RED;
+}
+
+#[cfg(feature = "display-ssd1306")]
+mod display {
+    use embedded_graphics::pixelcolor::BinaryColor;
+    use hal::i2c::I2C;
+    use hal::peripherals::I2C0;
+    use ssd1306::prelude::I2CInterface;
+    use ssd1306::{mode::BufferedGraphicsMode, size::DisplaySize128x64, Ssd1306};
+
+    pub type SIZE = DisplaySize128x64;
+    pub const SIZE: SIZE = DisplaySize128x64;
+    pub type DISPLAY<'a> = Ssd1306<I2CInterface<I2C<'a, I2C0>>, SIZE, BufferedGraphicsMode<SIZE>>;
+
+    pub type Color = BinaryColor;
+    pub const BACKGROUND: Color = BinaryColor::Off;
+    pub const TEXT: Color = BinaryColor::On;
 }
 
 use display::DISPLAY;
@@ -155,11 +174,38 @@ async fn main(spawner: embassy_executor::Spawner) {
         display
             .set_orientation(&st7735_lcd::Orientation::Landscape)
             .unwrap();
+        display.set_offset(0, 0);
         display
     };
 
-    display.clear(Rgb565::BLACK).unwrap();
-    display.set_offset(0, 0);
+    #[cfg(feature = "display-ssd1306")]
+    let mut display: DISPLAY = {
+        use hal::i2c::I2C;
+        use ssd1306::prelude::*;
+        use ssd1306::rotation::DisplayRotation;
+        use ssd1306::*;
+
+        let sda = io.pins.gpio1;
+        let scl = io.pins.gpio2;
+
+        let i2c = I2C::new(
+            peripherals.I2C0,
+            sda,
+            scl,
+            100u32.kHz(),
+            &mut system.peripheral_clock_control,
+            &clocks,
+        );
+
+        let interface = I2CDisplayInterface::new(i2c);
+        let mut display =
+            Ssd1306::new(interface, SIZE, DisplayRotation::Rotate0).into_buffered_graphics_mode();
+
+        display.init().unwrap();
+        display
+    };
+
+    display.clear(display::BACKGROUND).unwrap();
 
     spawner.spawn(connection_wifi(controller)).ok();
     spawner.spawn(net_task(&stack)).ok();
@@ -174,7 +220,7 @@ async fn task(
     mut input: Gpio9<Input<PullUp>>,
     stack: &'static Stack<WifiDevice<'static>>,
     seed: u64,
-    mut display: DISPLAY<'_>,
+    mut display: DISPLAY<'static>,
 ) {
     let mut rx_buffer = [0; 8 * 1024];
     let mut tls_read_buffer = [0; 8 * 1024];
@@ -183,7 +229,7 @@ async fn task(
     let tcp_client = TcpClient::new(&stack, &client_state);
     let dns = DnsSocket::new(&stack);
 
-    let style = MonoTextStyle::new(&FONT_6X10, Rgb565::WHITE);
+    let style = MonoTextStyle::new(&FONT_6X10, display::TEXT);
 
     loop {
         let _ = input.wait_for_any_edge().await;
@@ -204,7 +250,7 @@ async fn task(
                 }
                 Timer::after(Duration::from_millis(500)).await;
             }
-            display.clear(Rgb565::RED).unwrap();
+            display.clear(display::TEXT).unwrap();
             println!("clicked");
 
             let tls_config = TlsConfig::new(
@@ -226,14 +272,13 @@ async fn task(
 
             let body = from_utf8(response.body().read_to_end().await.unwrap()).unwrap();
 
-            display.clear(Rgb565::BLUE).unwrap();
+            display.clear(display::BACKGROUND).unwrap();
 
             Text::new(body, Point::new(10, 10), style)
                 .draw(&mut display)
                 .unwrap();
             println!("Http body: {}", body);
             Timer::after(Duration::from_millis(3000)).await;
-            break;
         }
     }
 }
