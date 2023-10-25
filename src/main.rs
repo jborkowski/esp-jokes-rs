@@ -5,25 +5,36 @@
 extern crate alloc;
 use core::{mem::MaybeUninit, str::from_utf8};
 use embassy_time::{Duration, Timer};
+use embedded_graphics::mono_font::MonoTextStyle;
+use embedded_graphics::mono_font::ascii::FONT_6X10;
+use embedded_graphics::prelude::*;
+use embedded_graphics::text::Text;
 use embedded_graphics::{pixelcolor::Rgb565, prelude::RgbColor};
 use embedded_svc::wifi::{Configuration, ClientConfiguration, Wifi};
 use esp_backtrace as _;
 use esp_println::println;
-use hal::{embassy, clock::{ClockControl, CpuClock}, peripherals::Peripherals, prelude::*, Delay, Rtc, timer::TimerGroup, gpio::{Gpio1, Input, PullDown, Gpio5, PullUp, Gpio19, Gpio0, Gpio9}, IO, Spi};
+use hal::peripherals::SPI2;
+use hal::spi::FullDuplexMode;
+use hal::{embassy, clock::ClockControl, peripherals::Peripherals, prelude::*, Delay, Rtc, timer::TimerGroup, gpio::*, IO, Spi};
 use hal::{systimer::SystemTimer, Rng};
 use esp_wifi::wifi::{WifiController, WifiDevice, WifiEvent, WifiMode, WifiState};
 use esp_wifi::{initialize, EspWifiInitFor};
 use embassy_net::{Config, Stack, StackResources, tcp::client::{TcpClient, TcpClientState}, dns::DnsSocket};
+use embassy_net::{Ipv4Address, Ipv4Cidr};
 
+use heapless::Vec;
 use embedded_graphics::draw_target::DrawTarget;
 use reqwless::client::{TlsVerify, TlsConfig, HttpClient};
-use st7735_lcd;
+use reqwless::headers::ContentType;
+use reqwless::request::{Method, RequestBuilder};
+use st7735_lcd::{self, ST7735};
 use st7735_lcd::Orientation;
-use embassy_executor::{_export::StaticCell, Executor};
 use static_cell::make_static;
 
 const SSID: &str = env!("SSID");
 const PASSWORD: &str = env!("PASSWORD");
+const IP_ADDRESS: Ipv4Cidr = Ipv4Cidr::new(Ipv4Address::new(192, 168, 50, 20), 24);
+const GATEWAY: Ipv4Address =  Ipv4Address::new(192, 168, 50, 1);
 
 #[global_allocator]
 static ALLOCATOR: esp_alloc::EspHeap = esp_alloc::EspHeap::empty();
@@ -38,6 +49,8 @@ fn init_heap() {
     }
 }
 
+type DISPLAY<'a> = ST7735<SPI, GpioPin<Output<PushPull>, 6>, GpioPin<Output<PushPull>, 7>>;
+type SPI = Spi<'static, SPI2, FullDuplexMode>;
 
 #[embassy_executor::main(entry = "hal::entry")]
 async fn main(spawner: embassy_executor::Spawner) {
@@ -45,7 +58,6 @@ async fn main(spawner: embassy_executor::Spawner) {
     let peripherals = Peripherals::take();
     let mut system = peripherals.SYSTEM.split();
     let clocks = ClockControl::max(system.clock_control).freeze();
-    //let clocks = ClockControl::configure(system.clock_control, CpuClock::Clock160MHz).freeze();
     
     let mut rtc = Rtc::new(peripherals.RTC_CNTL);
     let timer_group0 = TimerGroup::new(
@@ -63,18 +75,17 @@ async fn main(spawner: embassy_executor::Spawner) {
 
 
     // disable watchdog timers 
-
     rtc.swd.disable();
     rtc.rwdt.disable();
     wdt0.disable();
     wdt1.disable();
 
-    
+    let mut rng = Rng::new(peripherals.RNG);
     let timer = SystemTimer::new(peripherals.SYSTIMER).alarm0;
     let init = initialize(
         EspWifiInitFor::Wifi,
         timer,
-        Rng::new(peripherals.RNG),
+        rng,
         system.radio_clock_control,
         &clocks,
     ).unwrap();
@@ -86,14 +97,17 @@ async fn main(spawner: embassy_executor::Spawner) {
 
     embassy::init(&clocks, timer_group0.timer0);
 
-    let config = Config::dhcpv4(Default::default());
-    let seed = 145955;
+    
+    let dhcp4_config = embassy_net::DhcpConfig::default();
+    let config = Config::dhcpv4(dhcp4_config);
+   
+    let seed = rng.random();
 
     let stack = &*make_static!(Stack::new(
         wifi_interface,
         config,
         make_static!(StackResources::<3>::new()),
-        seed
+        seed.into()
     ));
     
 
@@ -109,7 +123,7 @@ async fn main(spawner: embassy_executor::Spawner) {
     let miso = io.pins.gpio6.into_push_pull_output(); // A0
     let rst = io.pins.gpio7.into_push_pull_output();
 
-    let spi = Spi::new(
+    let spi: SPI = Spi::new(
         peripherals.SPI2,
         io.pins.gpio1,
         io.pins.gpio2, // sda
@@ -120,8 +134,10 @@ async fn main(spawner: embassy_executor::Spawner) {
         &mut system.peripheral_clock_control,
         &clocks,
     );
+    
 
-    let mut display = st7735_lcd::ST7735::new(spi, miso, rst, true, false, 160, 128);
+    let mut display: DISPLAY =
+        st7735_lcd::ST7735::new(spi, miso, rst, true, false, 160, 128);
 
     let mut delay = Delay::new(&clocks);
     display.init(&mut delay).unwrap();
@@ -130,22 +146,77 @@ async fn main(spawner: embassy_executor::Spawner) {
     
     display.clear(Rgb565::BLACK).unwrap();
     display.set_offset(0, 0);
-
-
     
     spawner.spawn(connection_wifi(controller)).ok();
     spawner.spawn(net_task(&stack)).ok();
-    spawner.spawn(task(input)).ok();
-    spawner.spawn(get_joke(&stack)).ok();
+    spawner.spawn(task(input, &stack, seed.into(), display)).ok();
+   //  spawner.spawn(get_joke(&stack)).ok();
 
 }
 
 #[embassy_executor::task]
-async fn task(mut input: Gpio9<Input<PullUp>>) {
+async fn task(mut input: Gpio9<Input<PullUp>>, stack: &'static Stack<WifiDevice<'static>>, seed: u64, mut display: DISPLAY<'_>) {
+
+    let mut rx_buffer = [0; 4 * 1024];
+    let mut tls_read_buffer = [0; 4 * 1024];
+    let mut tls_write_buffer = [0; 4 * 1024];
+
+    let style = MonoTextStyle::new(&FONT_6X10, Rgb565::WHITE);
+    
+    // let client_state = TcpClientState::<1, 1096, 1096>::new();
+    // let tcp_client = TcpClient::new(&stack, &client_state);
+    // let dns = DnsSocket::new(&stack);
+
     loop {
-        input.wait_for_any_edge().await;
+        let _ = input.wait_for_any_edge().await;
         if input.is_high().unwrap() {
+            println!("started");
+            loop {
+                if stack.is_link_up() {
+                    break;
+                }
+                Timer::after(Duration::from_millis(500)).await;
+            }
+ 
+            println!("Waiting to get IP address...");
+            loop {
+                if let Some(config) = stack.config_v4() {
+                    println!("Got IP: {}", config.address);
+                    break;
+                }
+                Timer::after(Duration::from_millis(500)).await;
+            }
+            display.clear(Rgb565::RED).unwrap();
             println!("clicked");
+            loop {
+                let client_state = TcpClientState::<4, 4096, 4096>::new();
+                let tcp_client = TcpClient::new(&stack, &client_state);
+                let dns = DnsSocket::new(&stack);
+            
+                let tls_config = TlsConfig::new(seed, &mut tls_read_buffer, &mut tls_write_buffer, TlsVerify::None);
+                let mut http_client = HttpClient::new_with_tls(&tcp_client, &dns, tls_config);
+                let mut request =
+                    http_client.request(Method::GET, "https://v2.jokeapi.dev/joke/Programming\\?format=text")
+                        .await
+                        .unwrap();
+            
+                let response = request
+                    .send(&mut rx_buffer)
+                    .await
+                    .unwrap();
+
+                
+
+                let body = from_utf8(response.body().read_to_end().await.unwrap()).unwrap();
+
+                display.clear(Rgb565::GREEN).unwrap();
+
+                Text::new(body, Point::new(1,1), style).draw(&mut display).unwrap();
+                println!("Http body: {}", body);
+                Timer::after(Duration::from_millis(3000)).await;
+
+            }
+        
         }
     }
 }
@@ -191,10 +262,6 @@ async fn net_task(stack: &'static Stack<WifiDevice<'static>>) {
 
 #[embassy_executor::task]
 async fn get_joke(stack: &'static Stack<WifiDevice<'static>>) {
-     let mut rx_buffer = [0; 8192];
-     let mut tls_read_buffer = [0; 8192];
-     let mut tls_write_buffer = [0; 8192];
-
      loop {
          if stack.is_link_up() {
              break;
@@ -209,22 +276,7 @@ async fn get_joke(stack: &'static Stack<WifiDevice<'static>>) {
             break;
         }
         Timer::after(Duration::from_millis(500)).await;
-    }
-
-     loop {
-         let client_state = TcpClientState::<1,1024,1024>::new();
-         let tcp_client = TcpClient::new(&stack, &client_state);
-         let dns = DnsSocket::new(&stack);
-         let tls_config = TlsConfig::new(123456778_u64, &mut tls_read_buffer, &mut tls_write_buffer, TlsVerify::None);
-         let mut http_client = HttpClient::new_with_tls(&tcp_client, &dns, tls_config);
-         let mut request = http_client.request(reqwless::request::Method::GET, "https://v2.jokeapi.dev/joke/Programming").await.unwrap();
-
-         let response = request.send(&mut rx_buffer).await.unwrap();
-         println!("Http result: {:?}",response.status);
-
-         let body = from_utf8(response.body().read_to_end().await.unwrap()).unwrap();
-         println!("Http body: {}",body);
-
-         Timer::after(Duration::from_millis(3000)).await;
      }
+
+    println!("Got IP: {}", stack.is_config_up());
 }
