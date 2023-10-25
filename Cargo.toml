@@ -27,5 +27,6 @@ embedded-graphics = "0.8.1"
 st7735-lcd = "0.9.0"
 
 static_cell = { version = "1.2.0", features = ["nightly"] }
+embedded-text = "0.6.6"
 
 
