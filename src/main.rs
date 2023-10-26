@@ -24,6 +24,12 @@ use esp_backtrace as _;
 use esp_println::println;
 use esp_wifi::wifi::{WifiController, WifiDevice, WifiEvent, WifiMode, WifiState};
 use esp_wifi::{initialize, EspWifiInitFor};
+
+#[cfg(feature = "esp32c3")]
+pub use esp32c3_hal as hal;
+#[cfg(feature = "esp32c6")]
+pub use esp32c6_hal as hal;
+
 use hal::{
     clock::ClockControl, embassy, gpio::*, peripherals::Peripherals, prelude::*, timer::TimerGroup,
     Rtc, IO,
@@ -76,6 +82,7 @@ mod display {
 
 #[cfg(feature = "display-ssd1306")]
 mod display {
+    use super::*;
     use embedded_graphics::pixelcolor::BinaryColor;
     use hal::i2c::I2C;
     use hal::peripherals::I2C0;
@@ -101,10 +108,18 @@ use display::DISPLAY;
 async fn main(spawner: embassy_executor::Spawner) {
     init_heap();
     let peripherals = Peripherals::take();
+    #[cfg(feature = "esp32c3")]
     let mut system = peripherals.SYSTEM.split();
+    #[cfg(feature = "esp32c6")]
+    let mut system = peripherals.PCR.split();
+
     let clocks = ClockControl::max(system.clock_control).freeze();
 
+    #[cfg(feature = "esp32c3")]
     let mut rtc = Rtc::new(peripherals.RTC_CNTL);
+    #[cfg(feature = "esp32c6")]
+    let mut rtc = Rtc::new(peripherals.LP_CLKRST);
+
     let timer_group0 = TimerGroup::new(
         peripherals.TIMG0,
         &clocks,

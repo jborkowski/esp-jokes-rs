@@ -815,6 +815,7 @@ dependencies = [
  "esp-println",
  "esp-wifi",
  "esp32c3-hal",
+ "esp32c6-hal",
  "heapless 0.7.16",
  "log",
  "reqwless",
@@ -972,6 +973,7 @@ version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "12335dedcfa4ff0391e92432d1a305897343e86a50cbb09aaec914e773b780f5"
 dependencies = [
+ "embassy-time 0.1.5",
  "esp-hal-common",
 ]
 

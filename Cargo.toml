@@ -6,12 +6,11 @@ edition = "2021"
 license = "MIT OR Apache-2.0"
 
 [dependencies]
-hal = { package = "esp32c3-hal", version = "0.12.0", features=["embassy","async","embassy-time-timg0"] }
-esp-backtrace = { version = "0.8.0", features = ["esp32c3", "panic-handler", "exception-handler", "print-uart"] }
-esp-println = { version = "0.6.0", features = ["esp32c3","log"] }
+esp-backtrace = { version = "0.8.0", features = ["panic-handler", "exception-handler", "print-uart"] }
+esp-println = { version = "0.6.0", features = ["log"] }
 log = { version = "0.4.18" }
 esp-alloc = { version = "0.3.0" }
-esp-wifi  = { git = "https://github.com/jborkowski/esp-wifi/", rev = "5d89236", features = ["esp32c3", "wifi", "embassy-net", "async"] }
+esp-wifi  = { git = "https://github.com/jborkowski/esp-wifi/", rev = "5d89236", features = ["wifi", "embassy-net", "async"] }
 smoltcp = { version = "0.10.0", default-features=false, features = ["proto-igmp", "proto-ipv4", "socket-tcp", "socket-icmp", "socket-udp", "medium-ethernet", "proto-dhcpv4", "socket-raw", "socket-dhcpv4"] }
 heapless = { version = "0.7.14", default-features = false }
 
@@ -28,13 +27,20 @@ embedded-graphics = "0.8.1"
 static_cell = { version = "1.2.0", features = ["nightly"] }
 embedded-text = "0.6.6"
 
+# chips
+esp32c3-hal = { version = "0.12.0", features=["embassy","async","embassy-time-timg0"], optional = true }
+esp32c6-hal = { version = "0.5.0", features=["embassy","async","embassy-time-timg0"], optional = true }
+
 # display drivers
 st7735-lcd = {version = "0.9.0", optional = true }
 ssd1306 = { version = "0.8.3", optional = true }
 display-interface = { version = "0.4.1", optional = true }
 
 [features]
-default = ["display-st7735"]
+default = ["display-st7735", "esp32c3"]
 #default = ["display-ssd1306"]
 display-st7735 = ["st7735-lcd"]
 display-ssd1306 = ["ssd1306", "display-interface"]
+
+esp32c3 = ["esp32c3-hal", "esp-backtrace/esp32c3", "esp-println/esp32c3", "esp-wifi/esp32c3"]
+esp32c6 = ["esp32c6-hal", "esp-backtrace/esp32c6", "esp-println/esp32c6", "esp-wifi/esp32c6"]
