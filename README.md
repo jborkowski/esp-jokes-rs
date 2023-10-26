@@ -24,13 +24,13 @@ Displays:
 - `display-st7735`
 - `display-ssd1306`
 
-- To build in the default mode (ESP32C3, ST7735), simply run:
+To build in the default mode (ESP32C3, ST7735), simply run:
 
    ```bash
    cargo run
    ```
 
-- For example, to build on ESP32C6 with SSD1306 display, use the following command:
+For example, to build on ESP32C6 with SSD1306 display, use the following command:
 
    ```bash
    cargo run --no-default-features --features esp32c6,display-ssd1306
