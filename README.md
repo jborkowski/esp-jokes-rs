@@ -1,6 +1,8 @@
 # ESP-Jokes-RS
 
-ESP-Jokes-RS is a lightweight, fun, and educational project that brings humor and laughter to your ESP32C32 development board by displaying jokes on its OLED or LCD screen. What's unique about this project is that it is written in Rust, using the `no_std` library, in adherence to the principles described in the [ESP-RS book](https://esp-rs.github.io/book/writing-your-own-application/nostd.html). This repository is based on the Wokwi example project for ESP32 and aims to demonstrate how you can program your ESP32 board in Rust without relying on the standard library.
+ESP-Jokes-RS is a lightweight, fun, and educational project that brings humor and laughter to your ESP32C32 development board by displaying jokes on its OLED or LCD screen. What's unique about this project is that it is written in Rust, using the `no_std` library, in adherence to the principles described in the [ESP-RS book](https://esp-rs.github.io/book/writing-your-own-application/nostd.html). This repository is based on the Wokwi example project for ESP32 and aims to demonstrate how you can program your ESP32 board in Rust without relying on the standard library. 
+
+But what makes ESP-Jokes-RS even more entertaining is that it fetches jokes from the internet on a button click! With the press of a button, your ESP32 board connects to https://v2.jokeapi.dev/ and retrieves a random joke from the internet, providing you with a source of endless laughter and amusement. This feature adds an interactive and dynamic element to your development board, making it both an educational and entertaining gadget.
 
 ## Features
 
@@ -69,7 +71,7 @@ Follow these steps to set up and run the project:
 
 ## Contributing
 
-We welcome contributions to this project. If you have ideas for more jokes, improvements, or want to add features, feel free to open an issue or a pull request.
+We welcome contributions to this project. If you have ideas for more improvements or want to add features, feel free to open an issue or a pull request.
 
 ## License
 
@@ -90,4 +92,4 @@ Special thanks to the ESP32 community, the Rust programming language developers,
 
 ---
 
-Let's have some fun and share a good laugh with your ESP32 board using ESP-Jokes-RS! If you encounter any issues, have suggestions, or want to share your own jokes, please don't hesitate to get involved in this project. Happy coding and happy laughing!
+Let's have some fun and share a good laugh with your ESP32 board using ESP-Jokes-RS! If you encounter any issues or have suggestions, please don't hesitate to get involved in this project. Happy coding and happy laughing!
