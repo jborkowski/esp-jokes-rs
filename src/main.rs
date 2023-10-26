@@ -1,6 +1,7 @@
 #![no_std]
 #![no_main]
 #![feature(type_alias_impl_trait)]
+#![allow(clippy::upper_case_acronyms)]
 
 extern crate alloc;
 use core::{mem::MaybeUninit, str::from_utf8};
@@ -237,10 +238,8 @@ async fn main(spawner: embassy_executor::Spawner) {
     display::flush(&mut display).unwrap();
 
     spawner.spawn(connection_wifi(controller)).ok();
-    spawner.spawn(net_task(&stack)).ok();
-    spawner
-        .spawn(task(input, &stack, seed.into(), display))
-        .ok();
+    spawner.spawn(net_task(stack)).ok();
+    spawner.spawn(task(input, stack, seed.into(), display)).ok();
     //  spawner.spawn(get_joke(&stack)).ok();
 }
 
@@ -255,8 +254,8 @@ async fn task(
     let mut tls_read_buffer = [0; 8 * 1024];
     let mut tls_write_buffer = [0; 8 * 1024];
     let client_state = TcpClientState::<4, 4096, 4096>::new();
-    let tcp_client = TcpClient::new(&stack, &client_state);
-    let dns = DnsSocket::new(&stack);
+    let tcp_client = TcpClient::new(stack, &client_state);
+    let dns = DnsSocket::new(stack);
 
     let style = MonoTextStyle::new(&FONT_6X10, display::TEXT);
     let textbox_style = TextBoxStyleBuilder::new()
@@ -324,14 +323,11 @@ async fn task(
 
 #[embassy_executor::task]
 async fn connection_wifi(mut controller: WifiController<'static>) {
-    println!("Strat connect with wifi (SSID: {:?}) task", SSID);
+    println!("Start connect with wifi (SSID: {:?}) task", SSID);
     loop {
-        match esp_wifi::wifi::get_wifi_state() {
-            WifiState::StaConnected => {
-                controller.wait_for_event(WifiEvent::StaDisconnected).await;
-                Timer::after(Duration::from_millis(5000)).await
-            }
-            _ => {}
+        if matches!(esp_wifi::wifi::get_wifi_state(), WifiState::StaConnected) {
+            controller.wait_for_event(WifiEvent::StaDisconnected).await;
+            Timer::after(Duration::from_millis(5000)).await
         }
         if !matches!(controller.is_started(), Ok(true)) {
             let client_config = Configuration::Client(ClientConfiguration {
