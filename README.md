@@ -79,7 +79,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 - This project is based on the Wokwi example project, and we are grateful for the inspiration it provided.
 
-## Author
+## Contributors
 
 - [Jonatan Borkowski](https://github.com/jborkowski)
 - [Maciej Bielecki](https://github.com/zyla)
