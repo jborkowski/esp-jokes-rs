@@ -10,29 +10,37 @@ But what makes ESP-Jokes-RS even more entertaining is that it fetches jokes from
 - Written in Rust, showcasing how to use the `no_std` library for ESP32 development.
 - Supports various display drivers, including ST7735 and SSD1306, thanks to the contributions in [this pull request](https://github.com/jborkowski/esp-jokes-rs/pull/1).
 
-## Display Selection
+## Supported hardware configurations
 
-You can choose between ST7735 and SSD1306 display drivers using feature flags:
+Hardware options are selected using Cargo features. Some are selected by default. To change the configuration pass `--no-default-features --features <your_features>`.
 
-- To build with ST7735 mode, simply run:
+Boards:
+
+- `esp32c3`
+- `esp32c6`
+
+Displays:
+
+- `display-st7735`
+- `display-ssd1306`
+
+- To build in the default mode (ESP32C3, ST7735), simply run:
 
    ```bash
    cargo run
    ```
 
-- To build with SSD1306 mode, use the following command:
+- For example, to build on ESP32C6 with SSD1306 display, use the following command:
 
    ```bash
-   cargo run --no-default-features --features display-ssd1306
+   cargo run --no-default-features --features esp32c6,display-ssd1306
    ```
-
-Make sure to select the appropriate feature flag depending on your display driver.
 
 ## Getting Started
 
 To get started with this project, you will need:
 
-- An ESP32 development board.
+- An ESP32 development board (See [Supported hardware configurations](#supported-hardware-configurations) above for which boards are supported)
 - An OLED or LCD display connected to your ESP32.
 - Rust and the associated toolchain installed on your development machine.
 
@@ -61,8 +69,9 @@ Follow these steps to set up and run the project:
    ```bash
    cargo run
    ```
+   **Note**: You might need additional options here depending on your hardware configuration, see [Supported hardware configurations](#supported-hardware-configurations).
 
-5. Once the flashing process is complete, your ESP32 board will display a series of jokes on the OLED or LCD screen. Enjoy the humor!
+5. Once the flashing process is complete, press the BOOT button, and your ESP32 board will display a series of jokes on the OLED or LCD screen. Enjoy the humor!
 
 ## Project Structure
 
