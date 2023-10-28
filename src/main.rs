@@ -4,7 +4,7 @@
 #![allow(clippy::upper_case_acronyms)]
 
 extern crate alloc;
-use core::{mem::MaybeUninit, str::from_utf8};
+use core::{mem::MaybeUninit, str};
 use embassy_net::{
     dns::DnsSocket,
     tcp::client::{TcpClient, TcpClientState},
@@ -308,15 +308,38 @@ async fn task(
 
             let response = request.send(&mut rx_buffer).await.unwrap();
 
-            let body = from_utf8(response.body().read_to_end().await.unwrap()).unwrap();
+            let text = str::from_utf8(response.body().read_to_end().await.unwrap()).unwrap();
+            println!("Joke: {}", text);
 
-            display.clear(display::BACKGROUND).unwrap();
-            TextBox::with_textbox_style(body, bounds, style, textbox_style)
-                .draw(&mut display)
-                .unwrap();
-            display::flush(&mut display).unwrap();
+            let text_height = textbox_style.measure_text_height(&style, text, bounds.size.width);
+            let screen_height = display.bounding_box().size.height;
+            let max_offset = core::cmp::max(0, text_height as i32 - screen_height as i32) as u32;
 
-            println!("Http body: {}", body);
+            let mut offset: u32 = 0;
+            loop {
+                println!("Drawing at offset {offset}");
+
+                display.clear(display::BACKGROUND).unwrap();
+                TextBox::with_textbox_style(text, bounds, style, textbox_style)
+                    .translate(Point::new(0, -(offset as i32)))
+                    .draw(&mut display).unwrap();
+                display::flush(&mut display).unwrap();
+
+                if offset >= max_offset {
+                    println!("Beyond max offset, end of this joke");
+                    break;
+                }
+
+                println!("Still some text left to display (max_offset={max_offset}), press to scroll");
+                offset = core::cmp::min(max_offset, offset + screen_height / 2);
+
+                loop {
+                    let _ = input.wait_for_any_edge().await;
+                    if input.is_high().unwrap() {
+                        break;
+                    }
+                }
+            }
         }
     }
 }
